@@ -1,5 +1,5 @@
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 import streamlit as st
 from ultralytics import YOLO
 
@@ -73,7 +73,7 @@ if uploaded_file is not None:
 
           label_text = f"{class_name} ({severity}) {conf:.2f}"
 
-        # Draw bounding box (using Pillow instead of OpenCV)
+        # Draw bounding box using Pillow
         draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
         draw.text((x1, max(y1 - 15, 0)), label_text, fill=color)
 
@@ -82,11 +82,5 @@ if uploaded_file is not None:
           image,
           caption=f"Analysis Result ({detection_count} objects detected)",
           use_column_width=True,
-      )
-      st.success("Analysis complete!")
-        )
-
-      st.image(
-          annotated_img, caption="Processed Detection Results", use_column_width=True
       )
       st.success("Analysis complete!")
