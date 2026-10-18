@@ -1,17 +1,23 @@
-import cv2
-from PIL import Image
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 import streamlit as st
 from ultralytics import YOLO
 
-# Page config
-st.set_page_config(page_title="Road Damage & Severity Predictor", layout="centered")
+# Page configuration
+st.set_page_config(
+    page_title="Smart Road Damage Predictor",
+    page_icon="🚧",
+    layout="centered",
+)
 
 st.title("🚧 Smart Road Damage & Pothole Severity Predictor")
-st.write("Upload a road image to detect potholes, cracks, and manholes.")
+st.write(
+    "Upload a road image to detect potholes, cracks, and manholes, and"
+    " analyze their severity."
+)
 
 
-# Load trained YOLO model (looks for best.pt in the same folder)
+# Load YOLO model (Cached)
 @st.cache_resource
 def load_model():
   return YOLO("best.pt")
@@ -19,24 +25,28 @@ def load_model():
 
 model = load_model()
 
+# File uploader widget
 uploaded_file = st.file_uploader(
     "Choose a road image...", type=["jpg", "jpeg", "png"]
 )
 
 if uploaded_file is not None:
-  image = Image.open(uploaded_file)
-  img_array = np.array(image)
-  h, w, _ = img_array.shape
+  image = Image.open(uploaded_file).convert("RGB")
+  w, h = image.size
 
-  st.image(image, caption="Uploaded Image", use_column_width=True)
+  st.image(image, caption="Uploaded Road Image", use_column_width=True)
 
-  if st.button("Detect and Analyze"):
-    with st.spinner("Analyzing road condition..."):
-      results = model(img_array)[0]
-      annotated_img = img_array.copy()
+  if st.button("Run Damage & Severity Analysis"):
+    with st.spinner("Analyzing road conditions..."):
+      # Run inference
+      results = model(image)[0]
+      draw = ImageDraw.Draw(image)
+
+      detection_count = 0
 
       for box in results.boxes:
-        coords = box.xyxy[0].tolist()
+        detection_count += 1
+        coords = box.xyxy[0].tolist()  # [x1, y1, x2, y2]
         cls_id = int(box.cls[0])
         conf = float(box.conf[0])
         class_name = model.names[cls_id]
@@ -46,40 +56,34 @@ if uploaded_file is not None:
         img_area = w * h
         ratio = (box_area / img_area) * 100
 
-        # Handle manholes differently from structural damage
+        # Assign colors and labels
         if class_name == "manhole":
-          color = (255, 255, 0)  # Cyan for infrastructure/manholes
+          color = (0, 255, 255)  # Cyan
           label_text = f"{class_name} {conf:.2f}"
         else:
-          # Severity calculation based on area ratio for potholes and cracks
           if ratio < 5:
             severity = "Low"
             color = (0, 255, 0)  # Green
           elif ratio < 20:
             severity = "Medium"
-            color = (0, 165, 255)  # Orange
+            color = (255, 165, 0)  # Orange
           else:
             severity = "High"
             color = (255, 0, 0)  # Red
 
           label_text = f"{class_name} ({severity}) {conf:.2f}"
 
-        # Draw bounding boxes and labels
-        cv2.rectangle(
-            annotated_img,
-            (int(x1), int(y1)),
-            (int(x2), int(y2)),
-            color,
-            3,
-        )
-        cv2.putText(
-            annotated_img,
-            label_text,
-            (int(x1), max(int(y1) - 10, 10)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            color,
-            2,
+        # Draw bounding box (using Pillow instead of OpenCV)
+        draw.rectangle([x1, y1, x2, y2], outline=color, width=4)
+        draw.text((x1, max(y1 - 15, 0)), label_text, fill=color)
+
+      # Show final annotated image
+      st.image(
+          image,
+          caption=f"Analysis Result ({detection_count} objects detected)",
+          use_column_width=True,
+      )
+      st.success("Analysis complete!")
         )
 
       st.image(
